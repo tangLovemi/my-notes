@@ -1,0 +1,74 @@
+
+
+----1111.
+CCSpriteFrameCache
+[CCSpriteFrameCache sharedSpriteFrameCache] addSpriteFramesWithFile:@"Resources.plist"];
+纹理贴图集是一张包含很多图片的纹理贴图（图片），通常用于存放单个角色动画的所有动画帧。
+不过它的作用不止于此。实际上你可以把任何图片放进同一张纹理贴图中。我们的目的是把尽可
+能多的图片放进同一张纹理贴图中，以达到节省空间的目的。 我主要用TexturePackerGUI来生成纹理贴图集 
+
+
+----2222.
+CCSpriteBatchNode
+CCSpriteBatchNode *batch = [CCSpriteBatchNode batchNodeWithFile:@"shopAmber.png"];//初始化时给一张纹理图
+[self addChild:batch];//加入到当前Layer 
+CCSprite *spr = [CCSprite spriteWithFile:@"shopAmber.png"];//切记！ 这里的纹理图必须和上面相同，否则会崩溃～    
+[batch addChild:spr z:2]; 
+CCSprite *spr2 = [CCSprite spriteWithFile:@"shopAmber.png"];
+[batch addChild:spr2 z:1];
+优点：CCSpriteBatchNode 中的所有CCSprite只会被渲染1次，因此可以提高游戏的FPS。提高运行效率
+限制：加入到 CCSpriteBatchNode 中的CCSprite必须使用同一张纹理图。
+      每个子精灵都是用相同的z-order(深度)。
+总结：把使用同一张纹理贴图的一组CCSprite节点添加到同一个CCSpriteBatchNode里，比逐个渲染CCSprite要高效很多。
+
+
+
+----3333.
+因为cocos2d会自动生成所有图片的缓存，所以你需要一个方法来卸载不再需要的贴图内存。
+大多数情况下，你可以依赖cocos2d来帮你卸载：
+
+CCSpriteFrameCache::sharedSpriteFrameCache()->removeUnusedSpriteFrames(); 
+CCTextureCache::sharedTextureCache()->removeUnusedTextures(); 
+这里会从集合中移除"引用计数"为1的的纹理-->此纹理的"引用计数"就会减1，变为0-->内存移除
+
+如果你想在加载新场景之前完全删除所有内存中的贴图，你应该使用以下方法（从集合中移除所有）
+CCSpriteFrameCache::purgeSharedSpriteFrameCache(); 
+CCTextureCache::purgeSharedTextureCache(); 
+
+
+
+----4444.
+CCSpriteFrameCache 和 CCSpriteBatchNode结合使用
+--加载大图
+CCSpriteFrameCache::sharedSpriteFrameCache()->addSpriteFramesWithFile("showroom.plist");
+--从大图中找到需要多次使用的小图
+CCTexture2D * tex = CCTextureCache::sharedTextureCache()->textureForKey("showroom_item_1.png");
+CCSpriteBatchNode *batchNode = CCSpriteBatchNode::createWithTexture(tex);
+this->addChild(batchNode); //注意这里就好了
+CCSprite * s1 = CCSprite::createWithSpriteFrameName("showroom_item_1.png"); 
+CCSprite * s2 = CCSprite::createWithSpriteFrameName("showroom_item_1.png");
+batchNode->addChild(s1);　　//注意这里就好了
+batchNode->addChild(s2);　　//注意这里就好了
+
+
+
+----5555.
+图片进入内存后会4倍与本身大小（png格式）
+资料上说了一种简单估算一个图片会占内存大小，比如一种16*16的，那么占的内存是16*16*4=1kb
+（应该没错吧。呵呵，资料上说512*512*4 = 1M）。
+1024*1024 --> 1K * 1K * 4 = 4M
+2048*2048 --> 2K * 2K * 4 = 16M
+以上都针对的纹理像素格式为32位颜色深度编码
+
+
+----6666.
+不要使用jpg格式图片
+一个Texture加入内存，短时间内会消耗两个Texture内存大小（它会消耗两倍于它本身内存占用的内存大小），
+原因是，加载一个Texture分两个过程：
+1.从图片文件中创建一个UIImage对象。2.以这个创建好的UIImage对象来创建CCTexture2D对象
+临时创建的UIImage对象会被回收
+
+举例：一个2048*2048 的png图片，占用内存是4*(2048*2048) = 16M
+      进入内存后短时间内会消耗掉：2*16M = 32M
+      而同样的jpg格式图片，短时间会消耗：3*16M = 48M （因为JPG纹理在加载的时候，会实时地转化为PNG格式的纹理）
+结论：不要使用jpg格式图片
